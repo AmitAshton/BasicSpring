@@ -1,0 +1,663 @@
+Index: src/main/java/com/handson/basic/jwt/JwtAuthenticationController.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/com/handson/basic/jwt/JwtAuthenticationController.java b/src/main/java/com/handson/basic/jwt/JwtAuthenticationController.java
+new file mode 100644
+--- /dev/null	(date 1643146265417)
++++ b/src/main/java/com/handson/basic/jwt/JwtAuthenticationController.java	(date 1643146265417)
+@@ -0,0 +1,64 @@
++package com.handson.basic.jwt;
++
++import org.springframework.beans.factory.annotation.Autowired;
++import org.springframework.http.ResponseEntity;
++import org.springframework.security.authentication.AuthenticationManager;
++import org.springframework.security.authentication.BadCredentialsException;
++import org.springframework.security.authentication.DisabledException;
++import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
++import org.springframework.security.core.userdetails.User;
++import org.springframework.security.core.userdetails.UserDetails;
++import org.springframework.security.crypto.password.PasswordEncoder;
++import org.springframework.web.bind.annotation.*;
++
++import java.util.ArrayList;
++
++@RestController
++@CrossOrigin
++public class JwtAuthenticationController {
++
++    @Autowired
++    private AuthenticationManager authenticationManager;
++
++    @Autowired
++    private JwtTokenUtil jwtTokenUtil;
++
++    @Autowired
++    private JwtUserDetailsService userDetailsService;
++
++    @Autowired
++    private DBUserService userService;
++
++    @Autowired
++    private PasswordEncoder passwordEncoder;
++    @Autowired
++    AuthenticationManager am;
++
++    @RequestMapping(value = "/authenticate", method = RequestMethod.POST)
++    public ResponseEntity<?> createAuthenticationToken(@RequestBody JwtRequest authenticationRequest) throws Exception {
++        authenticate(authenticationRequest.getUsername(), authenticationRequest.getPassword());
++        final UserDetails userDetails = userDetailsService.loadUserByUsername(authenticationRequest.getUsername());
++        final String token = jwtTokenUtil.generateToken(userDetails);
++        return ResponseEntity.ok(new JwtResponse(token));
++    }
++
++    @RequestMapping(value = "/user", method = RequestMethod.POST)
++    public ResponseEntity<?> createUser(@RequestBody JwtRequest userRequest) throws Exception {
++        String encodedPass = passwordEncoder.encode(userRequest.getPassword());
++        DBUser user = DBUser.UserBuilder.anUser().name(userRequest.getUsername())
++                .password(encodedPass).build();
++        userService.save(user);
++        UserDetails userDetails = new User(userRequest.getUsername(), encodedPass, new ArrayList<>());
++        return ResponseEntity.ok(new JwtResponse(jwtTokenUtil.generateToken(userDetails)));
++    }
++
++    private void authenticate(String username, String password) throws Exception {
++        try {
++            authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(username, password));
++        } catch (DisabledException e) {
++            throw new Exception("USER_DISABLED", e);
++        } catch (BadCredentialsException e) {
++            throw new Exception("INVALID_CREDENTIALS", e);
++        }
++    }
++}
+Index: src/main/java/com/handson/basic/jwt/JwtUserDetailsService.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/com/handson/basic/jwt/JwtUserDetailsService.java b/src/main/java/com/handson/basic/jwt/JwtUserDetailsService.java
+new file mode 100644
+--- /dev/null	(date 1643146265442)
++++ b/src/main/java/com/handson/basic/jwt/JwtUserDetailsService.java	(date 1643146265442)
+@@ -0,0 +1,29 @@
++package com.handson.basic.jwt;
++
++import org.springframework.beans.factory.annotation.Autowired;
++import org.springframework.security.core.userdetails.User;
++import org.springframework.security.core.userdetails.UserDetails;
++import org.springframework.security.core.userdetails.UserDetailsService;
++import org.springframework.security.core.userdetails.UsernameNotFoundException;
++import org.springframework.stereotype.Service;
++
++import java.util.ArrayList;
++import java.util.Optional;
++
++@Service
++public class JwtUserDetailsService implements UserDetailsService {
++
++    @Autowired
++    private DBUserService userService;
++
++    @Override
++    public UserDetails loadUserByUsername(String userName) throws UsernameNotFoundException {
++
++        Optional<DBUser> dbUser = userService.findUserName(userName);
++        if (dbUser.isPresent()) {
++            return new User(dbUser.get().getName(), dbUser.get().getPassword(), new ArrayList<>());
++        } else {
++            throw new UsernameNotFoundException("User not found : " + userName);
++        }
++    }
++}
+Index: src/main/java/com/handson/basic/jwt/JwtResponse.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/com/handson/basic/jwt/JwtResponse.java b/src/main/java/com/handson/basic/jwt/JwtResponse.java
+new file mode 100644
+--- /dev/null	(date 1643146265468)
++++ b/src/main/java/com/handson/basic/jwt/JwtResponse.java	(date 1643146265468)
+@@ -0,0 +1,16 @@
++package com.handson.basic.jwt;
++
++import java.io.Serializable;
++
++public class JwtResponse implements Serializable {
++    private static final long serialVersionUID = -8091879091924046844L;
++    private final String jwttoken;
++
++    public JwtResponse(String jwttoken) {
++        this.jwttoken = jwttoken;
++    }
++
++    public String getToken() {
++        return this.jwttoken;
++    }
++}
+Index: src/main/java/com/handson/basic/jwt/UserService.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/com/handson/basic/jwt/UserService.java b/src/main/java/com/handson/basic/jwt/UserService.java
+new file mode 100644
+--- /dev/null	(date 1643146265438)
++++ b/src/main/java/com/handson/basic/jwt/UserService.java	(date 1643146265438)
+@@ -0,0 +1,11 @@
++package com.handson.basic.jwt;
++
++import org.springframework.stereotype.Service;
++
++@Service
++public class UserService {
++
++
++    public void save(DBUser user) {
++    }
++}
+Index: src/main/java/com/handson/basic/jwt/DBUserRepository.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/com/handson/basic/jwt/DBUserRepository.java b/src/main/java/com/handson/basic/jwt/DBUserRepository.java
+new file mode 100644
+--- /dev/null	(date 1643146265422)
++++ b/src/main/java/com/handson/basic/jwt/DBUserRepository.java	(date 1643146265422)
+@@ -0,0 +1,9 @@
++package com.handson.basic.jwt;
++
++import org.springframework.data.repository.CrudRepository;
++
++import java.util.Optional;
++
++public interface DBUserRepository extends CrudRepository<DBUser,Long> {
++    Optional<DBUser> findByName(String name);
++}
+Index: src/main/java/com/handson/basic/jwt/DBUser.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/com/handson/basic/jwt/DBUser.java b/src/main/java/com/handson/basic/jwt/DBUser.java
+new file mode 100644
+--- /dev/null	(date 1643146265446)
++++ b/src/main/java/com/handson/basic/jwt/DBUser.java	(date 1643146265446)
+@@ -0,0 +1,113 @@
++package com.handson.basic.jwt;
++
++
++import com.google.common.base.MoreObjects;
++import org.springframework.data.domain.Persistable;
++import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
++
++import javax.persistence.*;
++import java.io.Serializable;
++
++@Entity
++@Table(name = "users")
++public class DBUser implements Serializable, Persistable<Long> {
++
++    private static final long serialVersionUID = -5554304839188669754L;
++
++    protected Long id;
++
++    @Id
++    @GeneratedValue(strategy = GenerationType.IDENTITY)
++    @Access(AccessType.PROPERTY)
++    public Long getId() {
++        return id;
++    }
++
++    protected void setId(final Long id) {
++        this.id = id;
++    }
++
++    @Override
++    @Transient
++    public boolean isNew() {
++        return null == getId();
++    }
++
++
++    @Column(nullable = false, length = 60)
++    private String name;
++
++
++    @Column(nullable = false, length = 255)
++    private String password;
++
++    protected DBUser() {
++    }
++
++    @Transient
++    public static String hashPassword(String password) {
++        return new BCryptPasswordEncoder().encode(password);
++//        return Hashing.sha256().hashString(password, Charset.defaultCharset()).toString();
++    }
++
++    @Override
++    public String toString() {
++        return MoreObjects.toStringHelper(this)
++                .add("id", getId())
++                .add("name", name)
++                .toString();
++    }
++
++    public String getName() {
++        return name;
++    }
++
++    public void setPassword(String password) {
++        this.password = password; //DBUser.hashPassword(unencryptedPassword);
++    }
++
++    public String getPassword() {
++        return password;
++    }
++
++    public void setName(String name) {
++        this.name = name;
++    }
++
++
++    public static final class UserBuilder {
++        protected Long id;
++        private String name;
++        private String password;//https://bcrypt-generator.com/ generate password user+email:javainuse,password:$2y$12$JfmXLQVmTZGpeYVgr6AVhejDGynQ739F4pJE1ZjyCPTvKIHTYb2fi
++
++        private UserBuilder() {
++        }
++
++        public static UserBuilder anUser() {
++            return new UserBuilder();
++        }
++
++        public UserBuilder name(String name) {
++            this.name = name;
++            return this;
++        }
++
++        public UserBuilder password(String password) {
++            this.password = password;
++            return this;
++        }
++
++        public UserBuilder id(Long id) {
++            this.id = id;
++            return this;
++        }
++
++        public DBUser build() {
++            DBUser user = new DBUser();
++            user.setName(name);
++            user.setPassword(password);
++            user.setId(id);
++            return user;
++        }
++    }
++}
+Index: src/main/java/com/handson/basic/jwt/WebSecurityConfig.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/com/handson/basic/jwt/WebSecurityConfig.java b/src/main/java/com/handson/basic/jwt/WebSecurityConfig.java
+new file mode 100644
+--- /dev/null	(date 1643146265433)
++++ b/src/main/java/com/handson/basic/jwt/WebSecurityConfig.java	(date 1643146265433)
+@@ -0,0 +1,79 @@
++package com.handson.basic.jwt;
++
++import org.springframework.beans.factory.annotation.Autowired;
++import org.springframework.context.annotation.Bean;
++import org.springframework.context.annotation.Configuration;
++import org.springframework.http.HttpMethod;
++import org.springframework.security.authentication.AuthenticationManager;
++import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
++import org.springframework.security.config.annotation.method.configuration.EnableGlobalMethodSecurity;
++import org.springframework.security.config.annotation.web.builders.HttpSecurity;
++import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
++import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
++import org.springframework.security.config.http.SessionCreationPolicy;
++import org.springframework.security.core.userdetails.UserDetailsService;
++import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
++import org.springframework.security.crypto.password.PasswordEncoder;
++import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
++
++@Configuration
++@EnableWebSecurity
++@EnableGlobalMethodSecurity(prePostEnabled = true)
++public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
++
++    @Autowired
++    private JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
++
++    @Autowired
++    private UserDetailsService jwtUserDetailsService;
++
++    @Autowired
++    private JwtRequestFilter jwtRequestFilter;
++
++    @Autowired
++    public void configureGlobal(AuthenticationManagerBuilder auth) throws Exception {
++        // configure AuthenticationManager so that it knows from where to load
++        // user for matching credentials
++        // Use BCryptPasswordEncoder
++        auth.userDetailsService(jwtUserDetailsService).passwordEncoder(passwordEncoder());
++    }
++
++    @Bean
++    public PasswordEncoder passwordEncoder() {
++        return new BCryptPasswordEncoder();
++    }
++
++    @Bean
++    @Override
++    public AuthenticationManager authenticationManagerBean() throws Exception {
++        return super.authenticationManagerBean();
++    }
++
++    @Override
++    protected void configure(HttpSecurity httpSecurity) throws Exception {
++
++        // We don't need CSRF for this example
++        // dont authenticate this particular request
++        httpSecurity.csrf().disable().authorizeRequests().antMatchers("/authenticate", "/user", "/actuator/**",
++                "/swagger-ui.html",
++                "/api/swagger-ui.html",
++                "/v2/api-docs",
++                "/configuration/ui",
++                "/swagger-resources/**",
++                "/configuration/security",
++                "/webjars/**").permitAll()
++        .antMatchers(HttpMethod.OPTIONS,"/**").permitAll().
++
++
++
++        // all other requests need to be authenticated
++        // make sure we use stateless session; session won't be used to
++        // store user's state.
++
++        anyRequest().authenticated().and().exceptionHandling().authenticationEntryPoint(jwtAuthenticationEntryPoint).and().sessionManagement()
++                .sessionCreationPolicy(SessionCreationPolicy.STATELESS);
++
++        // Add a filter to validate the tokens with every request
++        httpSecurity.addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class);
++    }
++}
+Index: src/main/java/com/handson/basic/jwt/JwtTokenUtil.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/com/handson/basic/jwt/JwtTokenUtil.java b/src/main/java/com/handson/basic/jwt/JwtTokenUtil.java
+new file mode 100644
+--- /dev/null	(date 1643146649992)
++++ b/src/main/java/com/handson/basic/jwt/JwtTokenUtil.java	(date 1643146649992)
+@@ -0,0 +1,64 @@
++package com.handson.basic.jwt;
++
++import io.jsonwebtoken.Claims;
++import io.jsonwebtoken.Jwts;
++import io.jsonwebtoken.SignatureAlgorithm;
++import org.springframework.security.core.userdetails.UserDetails;
++import org.springframework.stereotype.Component;
++
++import java.io.Serializable;
++import java.util.Date;
++import java.util.HashMap;
++import java.util.Map;
++import java.util.function.Function;
++
++@Component
++public class JwtTokenUtil implements Serializable {
++    private static final long serialVersionUID = -2550185165626007488L;
++    public static final long JWT_TOKEN_VALIDITY = 5 * 60 * 60;
++
++//    @Value("${jwt.secret}")
++    private String secret = "AppSecrettttt1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890";
++
++    public String getUsernameFromToken(String token) {
++        return getClaimFromToken(token, Claims::getSubject);
++    }
++    //retrieve expiration date from jwt token
++    public Date getExpirationDateFromToken(String token) {
++        return getClaimFromToken(token, Claims::getExpiration);
++    }
++
++    public <T> T getClaimFromToken(String token, Function<Claims, T> claimsResolver) {
++        final Claims claims = getAllClaimsFromToken(token);
++        return claimsResolver.apply(claims);
++    }
++    //for retrieving any information from token we will need the secret key
++    private Claims getAllClaimsFromToken(String token) {
++        return Jwts.parser().setSigningKey(secret).parseClaimsJws(token).getBody();
++    }
++
++    private Boolean isTokenExpired(String token) {
++        final Date expiration = getExpirationDateFromToken(token);
++        return expiration.before(new Date());
++    }
++
++    public String generateToken(UserDetails userDetails) {
++        Map<String, Object> claims = new HashMap<>();
++        return doGenerateToken(claims, userDetails.getUsername());
++    }
++    //while creating the token -
++//1. Define  claims of the token, like Issuer, Expiration, Subject, and the ID
++//2. Sign the JWT using the HS512 algorithm and secret key.
++//3. According to JWS Compact Serialization(https://tools.ietf.org/html/draft-ietf-jose-json-web-signature-41#section-3.1)
++//   compaction of the JWT to a URL-safe string
++    private String doGenerateToken(Map<String, Object> claims, String subject) {
++        return Jwts.builder().setClaims(claims).setSubject(subject).setIssuedAt(new Date(System.currentTimeMillis()))
++                .setExpiration(new Date(System.currentTimeMillis() + JWT_TOKEN_VALIDITY * 1000))
++                .signWith(SignatureAlgorithm.HS512, secret).compact();
++    }
++    //validate token
++    public Boolean validateToken(String token, UserDetails userDetails) {
++        final String username = getUsernameFromToken(token);
++        return (username.equals(userDetails.getUsername()) && !isTokenExpired(token));
++    }
++}
+Index: src/main/java/com/handson/basic/jwt/JwtRequestFilter.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/com/handson/basic/jwt/JwtRequestFilter.java b/src/main/java/com/handson/basic/jwt/JwtRequestFilter.java
+new file mode 100644
+--- /dev/null	(date 1643146265462)
++++ b/src/main/java/com/handson/basic/jwt/JwtRequestFilter.java	(date 1643146265462)
+@@ -0,0 +1,65 @@
++package com.handson.basic.jwt;
++
++import io.jsonwebtoken.ExpiredJwtException;
++import org.springframework.beans.factory.annotation.Autowired;
++import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
++import org.springframework.security.core.context.SecurityContextHolder;
++import org.springframework.security.core.userdetails.UserDetails;
++import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
++import org.springframework.stereotype.Component;
++import org.springframework.web.filter.OncePerRequestFilter;
++
++import javax.servlet.FilterChain;
++import javax.servlet.ServletException;
++import javax.servlet.http.HttpServletRequest;
++import javax.servlet.http.HttpServletResponse;
++import java.io.IOException;
++
++@Component
++public class JwtRequestFilter extends OncePerRequestFilter {
++
++    @Autowired
++    private JwtUserDetailsService jwtUserDetailsService;
++
++    @Autowired
++    private JwtTokenUtil jwtTokenUtil;
++
++    @Override
++    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
++            throws ServletException, IOException {
++        final String requestTokenHeader = request.getHeader("Authorization");
++        String username = null;
++        String jwtToken = null;
++// JWT Token is in the form "Bearer token". Remove Bearer word and get
++// only the Token
++        if (requestTokenHeader != null && requestTokenHeader.startsWith("Bearer ")) {
++            jwtToken = requestTokenHeader.substring(7);
++            try {
++                username = jwtTokenUtil.getUsernameFromToken(jwtToken);
++            } catch (IllegalArgumentException e) {
++                System.out.println("Unable to get JWT Token");
++            } catch (ExpiredJwtException e) {
++                System.out.println("JWT Token has expired");
++            }
++        } else if (!(request.getMethod().equals("OPTIONS")) && !request.getRequestURI().contains("actuator")){
++            logger.warn("JWT Token does not begin with Bearer String");
++        }
++// Once we get the token validate it.
++        if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
++            UserDetails userDetails = this.jwtUserDetailsService.loadUserByUsername(username);
++// if token is valid configure Spring Security to manually set
++// authentication
++            if (jwtTokenUtil.validateToken(jwtToken, userDetails)) {
++                UsernamePasswordAuthenticationToken usernamePasswordAuthenticationToken = new UsernamePasswordAuthenticationToken(
++                        userDetails, null, userDetails.getAuthorities());
++
++                usernamePasswordAuthenticationToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
++// After setting the Authentication in the context, we specify
++// that the current user is authenticated. So it passes the
++// Spring Security Configurations successfully.
++                SecurityContextHolder.getContext().setAuthentication(usernamePasswordAuthenticationToken);
++            }
++        }
++        chain.doFilter(request, response);
++    }
++}
+Index: src/main/java/com/handson/basic/jwt/JwtAuthenticationEntryPoint.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/com/handson/basic/jwt/JwtAuthenticationEntryPoint.java b/src/main/java/com/handson/basic/jwt/JwtAuthenticationEntryPoint.java
+new file mode 100644
+--- /dev/null	(date 1643146265473)
++++ b/src/main/java/com/handson/basic/jwt/JwtAuthenticationEntryPoint.java	(date 1643146265473)
+@@ -0,0 +1,33 @@
++package com.handson.basic.jwt;
++
++
++import org.springframework.security.core.AuthenticationException;
++import org.springframework.security.web.AuthenticationEntryPoint;
++import org.springframework.stereotype.Component;
++
++import javax.servlet.http.HttpServletRequest;
++import javax.servlet.http.HttpServletResponse;
++import java.io.IOException;
++import java.io.Serializable;
++
++@Component
++public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint, Serializable {
++    private static final long serialVersionUID = -7858869558953243875L;
++
++    @Override
++    public void commence(HttpServletRequest request, HttpServletResponse response, AuthenticationException authException) throws IOException {
++        response.setHeader("Access-Control-Allow-Origin", request.getHeader("Origin"));
++        response.setHeader("Access-Control-Allow-Credentials", "true");
++        response.setHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS, DELETE, PUT");
++        response.setHeader("Access-Control-Max-Age", "3600");
++
++        response.setHeader("Access-Control-Allow-Headers", "X-Requested-With, Access-Control-Allow-Headers, Content-Type, Authorization, Origin, Accept, Referer, User-Agent," +
++                "Origin, sec-fetch-mode, sec-fetch-site, Accept, CloudFront-Viewer-Country, CloudFront-Is-Tablet-Viewer, CloudFront-Forwarded-Proto, "+
++                "X-Forwarded-Proto, User-Agent, Referer, CloudFront-Is-Mobile-Viewer, CloudFront-Is-SmartTV-Viewer, Host, Accept-Encoding, Pragma, "+
++                "X-Forwarded-Port, X-Amzn-Trace-Id, Via, Cache-Control, X-Forwarded-For, X-Amz-Cf-Id, Accept-Language, CloudFront-Is-Desktop-Viewer, "+
++                "sec-fetch-dest"
++        );
++        response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized");
++
++    }
++}
+Index: src/main/java/com/handson/basic/jwt/JwtRequest.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/com/handson/basic/jwt/JwtRequest.java b/src/main/java/com/handson/basic/jwt/JwtRequest.java
+new file mode 100644
+--- /dev/null	(date 1643146265458)
++++ b/src/main/java/com/handson/basic/jwt/JwtRequest.java	(date 1643146265458)
+@@ -0,0 +1,34 @@
++package com.handson.basic.jwt;
++
++import java.io.Serializable;
++
++public class JwtRequest implements Serializable {
++    private static final long serialVersionUID = 5926468583005150707L;
++    private String username;
++    private String password;
++
++    //need default constructor for JSON Parsing
++    public JwtRequest() {
++    }
++
++    public JwtRequest(String username, String password) {
++        this.setUsername(username);
++        this.setPassword(password);
++    }
++
++    public String getUsername() {
++        return this.username;
++    }
++
++    public void setUsername(String username) {
++        this.username = username;
++    }
++
++    public String getPassword() {
++        return this.password;
++    }
++
++    public void setPassword(String password) {
++        this.password = password;
++    }
++}
+Index: src/main/java/com/handson/basic/jwt/DBUserService.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/com/handson/basic/jwt/DBUserService.java b/src/main/java/com/handson/basic/jwt/DBUserService.java
+new file mode 100644
+--- /dev/null	(date 1643146265428)
++++ b/src/main/java/com/handson/basic/jwt/DBUserService.java	(date 1643146265428)
+@@ -0,0 +1,26 @@
++package com.handson.basic.jwt;
++
++
++import org.slf4j.LoggerFactory;
++import org.springframework.beans.factory.annotation.Autowired;
++import org.springframework.stereotype.Service;
++
++import java.util.Optional;
++
++@Service
++public class DBUserService {
++
++
++    private static final org.slf4j.Logger logger = LoggerFactory.getLogger(DBUserService.class);
++
++    @Autowired
++    private DBUserRepository repository;
++
++    public Optional<DBUser> findUserName(String userName) {
++            return repository.findByName(userName);
++    }
++
++    public void save(DBUser user) {
++        repository.save(user);
++    }
++}

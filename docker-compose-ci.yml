@@ -1,0 +1,26 @@
+version: "3"
+services:
+  appserver:
+    container_name: server
+    hostname: localhost
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+  postgres:
+    image: postgres
+    environment:
+      POSTGRES_PASSWORD: postgres
+    ports:
+    - 5432:5432
+    volumes:
+      - ./postgresdata:/var/lib/postgresql/data
+    privileged: true
+  newman:
+    image: pstauffer/newman-htmlextra
+    volumes:
+      - ./test:/etc/newman
+    entrypoint: tail -f /dev/null
+  wait:
+    image: dokku/wait

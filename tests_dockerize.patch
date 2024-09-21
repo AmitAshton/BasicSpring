@@ -1,0 +1,581 @@
+Index: src/test/java/com/handson/basic/utils/MockedPrincipal.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/test/java/com/handson/basic/utils/MockedPrincipal.java b/src/test/java/com/handson/basic/utils/MockedPrincipal.java
+new file mode 100644
+--- /dev/null	(date 1643233148182)
++++ b/src/test/java/com/handson/basic/utils/MockedPrincipal.java	(date 1643233148182)
+@@ -0,0 +1,17 @@
++package com.handson.basic.utils;
++
++import org.mockito.Mockito;
++
++import java.security.Principal;
++
++import static org.mockito.Mockito.mock;
++
++public class MockedPrincipal {
++
++    public static Principal toPrincipal(String userName) {
++        Principal principal = mock(Principal.class);
++        Mockito.when(principal.getName()).thenReturn(userName);
++        return principal;
++    }
++
++}
+Index: src/test/java/com/handson/basic/utils/TestContext.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/test/java/com/handson/basic/utils/TestContext.java b/src/test/java/com/handson/basic/utils/TestContext.java
+new file mode 100644
+--- /dev/null	(date 1643310026229)
++++ b/src/test/java/com/handson/basic/utils/TestContext.java	(date 1643310026229)
+@@ -0,0 +1,110 @@
++package com.handson.basic.utils;
++
++import com.fasterxml.jackson.databind.ObjectMapper;
++import com.google.common.base.Strings;
++import com.handson.basic.controller.StudentsController;
++import com.handson.basic.model.StudentOut;
++import com.handson.basic.repo.StudentIn;
++import org.apache.commons.lang3.text.StrSubstitutor;
++
++import java.io.IOException;
++import java.net.URI;
++import java.nio.charset.StandardCharsets;
++import java.nio.file.Files;
++import java.nio.file.Paths;
++import java.security.Principal;
++import java.util.HashMap;
++import java.util.Map;
++import java.util.UUID;
++import java.util.stream.Stream;
++
++import static com.handson.basic.utils.StudentSearch.StudentSearchBuilder.aStudentSearch;
++import static org.mockito.Mockito.mock;
++import static org.mockito.Mockito.when;
++
++public class TestContext {
++
++    private final String userCreate = UUID.randomUUID().toString();
++
++    private final Map<String, String> vars = new HashMap<>();
++
++    private final ObjectMapper om;
++
++    private final Principal principal;
++
++    private StudentsController sc;
++
++    public TestContext(ObjectMapper om) {
++        super();
++        this.om = om;
++        vars.put("fullName", "");
++        vars.put("phone", "");
++        vars.put("satScore", "");
++        vars.put("graduationScore", "");
++        principal = mock(Principal.class);
++        when(principal.getName()).thenReturn(userCreate);
++    }
++
++    public void givenStudents(int numStudents, StudentsController studentsController) throws Exception {
++
++        for (int i = 0; i < numStudents; i++) {
++            vars.put("fullName", "Student-" + testUuid() + Strings.padStart(Integer.toString(i), 5, '0'));
++            vars.put("phone", i % 2 == 0 ? "" : "052523645" + String.valueOf(i));
++            vars.put("satScore",  String.valueOf(500 + 20*i));
++            vars.put("graduationScore", String.valueOf(70 + 2*i));
++            studentsController.insertStudent(get("json/student.json", StudentIn.class));
++        }
++    }
++
++    public StudentOut getFirstStudent() throws Exception {
++        return (StudentOut)search().execute().getData().get(0);
++    }
++
++    public StudentSearch.StudentSearchBuilder search() {
++        return aStudentSearch(sc, testUuid());
++    }
++
++    private String populate(String source) {
++        StrSubstitutor sub = new StrSubstitutor(vars, "{{", "}}");
++        return sub.replace(source);
++    }
++
++    public <T> T get(String jsonFile, Class<T> clazz) throws Exception {
++        String json = readFile(ClassLoader.getSystemResource(jsonFile).toURI());
++        String populatedJson = populate(json);
++        return om.readValue(populatedJson, clazz);
++    }
++
++    public void setStudentController(StudentsController sc) {
++        this.sc = sc;
++    }
++
++    public Principal getPrincipal() {
++        return principal;
++    }
++
++    public String testUuid() {
++        return userCreate;
++    }
++
++    public Principal getUser() {
++        return principal;
++    }
++
++    private static String readFile(URI filePath)
++    {
++        StringBuilder contentBuilder = new StringBuilder();
++
++        try (Stream<String> stream = Files.lines( Paths.get(filePath), StandardCharsets.UTF_8))
++        {
++            stream.forEach(s -> contentBuilder.append(s).append("\n"));
++        }
++        catch (IOException e)
++        {
++            e.printStackTrace();
++        }
++
++        return contentBuilder.toString();
++    }
++
++}
+Index: src/test/java/com/handson/basic/utils/TestMocks.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/test/java/com/handson/basic/utils/TestMocks.java b/src/test/java/com/handson/basic/utils/TestMocks.java
+new file mode 100644
+--- /dev/null	(date 1643310556736)
++++ b/src/test/java/com/handson/basic/utils/TestMocks.java	(date 1643310556736)
+@@ -0,0 +1,71 @@
++package com.handson.basic.utils;
++
++import com.amazonaws.services.s3.AmazonS3;
++import com.amazonaws.services.s3.model.ObjectListing;
++import com.amazonaws.services.s3.model.S3Object;
++import com.amazonaws.services.s3.model.S3ObjectInputStream;
++import com.handson.basic.util.AWSService;
++import com.handson.basic.util.SmsService;
++import org.apache.commons.io.IOUtils;
++import org.mockito.Mockito;
++import org.springframework.boot.test.context.TestConfiguration;
++import org.springframework.context.annotation.Bean;
++import org.springframework.context.annotation.Primary;
++import org.springframework.security.authentication.AuthenticationManager;
++import org.springframework.security.core.Authentication;
++
++import java.io.ByteArrayInputStream;
++import java.io.IOException;
++import java.util.ArrayList;
++
++import static org.mockito.ArgumentMatchers.any;
++import static org.mockito.ArgumentMatchers.anyString;
++import static org.mockito.Mockito.when;
++
++@TestConfiguration
++public class TestMocks {
++
++
++    @Bean
++    @Primary
++    public AmazonS3 s3Client() throws IOException {
++        AmazonS3 mockS3 = Mockito.mock(AmazonS3.class);
++//        S3Object mockS3Object = Mockito.mock(S3Object.class);
++//        when(mockS3.getObject(anyString(), anyString())).thenReturn(mockS3Object);
++//        S3ObjectInputStream[] streams = new S3ObjectInputStream[200];
++//        S3ObjectInputStream first = new S3ObjectInputStream(new ByteArrayInputStream(IOUtils.resourceToByteArray("sleep.zip", getClass().getClassLoader())) , null);
++//        for (int i = 0; i < streams.length; i++) {
++//            streams[i] = new S3ObjectInputStream(new ByteArrayInputStream(IOUtils.resourceToByteArray("sleep.zip", getClass().getClassLoader())), null);
++//        }
++//        when(mockS3Object.getObjectContent()).thenReturn(first, streams);
++//        ObjectListing listing = Mockito.mock(ObjectListing.class);
++//        Mockito.when(mockS3.listObjects(Mockito.any(), Mockito.any())).thenReturn(listing);
++//        Mockito.when(listing.getObjectSummaries()).thenReturn(new ArrayList<>());
++
++        return mockS3;
++
++    }
++
++    @Bean
++    @Primary
++    public AuthenticationManager authenticationManager() {
++        var res =  Mockito.mock(AuthenticationManager.class);
++        var auth = Mockito.mock(Authentication.class);
++        Mockito.when(res.authenticate(any())).thenReturn(auth);
++        return res;
++    }
++
++
++    @Bean
++    @Primary
++    public SmsService smsService() {
++        SmsService service = Mockito.mock(SmsService.class);
++        return service;
++    }
++    @Bean
++    @Primary
++    public AWSService awsService() {
++        AWSService service = Mockito.mock(AWSService.class);
++        return service;
++    }
++}
+Index: src/test/resources/json/student.json
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/test/resources/json/student.json b/src/test/resources/json/student.json
+new file mode 100644
+--- /dev/null	(date 1643235125707)
++++ b/src/test/resources/json/student.json	(date 1643235125707)
+@@ -0,0 +1,7 @@
++{
++  "birthDate": "1979-08-18",
++  "fullname": "{{fullName}}",
++  "graduationScore": {{graduationScore}},
++  "phone": "{{phone}}",
++  "satScore": {{satScore}}
++}
+Index: Dockerfile
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/Dockerfile b/Dockerfile
+new file mode 100644
+--- /dev/null	(date 1643237864455)
++++ b/Dockerfile	(date 1643237864455)
+@@ -0,0 +1,5 @@
++FROM openjdk:11
++COPY target/basic*.jar /usr/src/basic.jar
++COPY src/main/resources/application.properties /opt/conf/application.properties
++CMD ["java", "-jar", "/usr/src/basic.jar", "--spring.config.location=file:/opt/conf/application.properties"]
++
+Index: src/test/java/com/handson/basic/utils/StudentSearch.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/test/java/com/handson/basic/utils/StudentSearch.java b/src/test/java/com/handson/basic/utils/StudentSearch.java
+new file mode 100644
+--- /dev/null	(date 1643236512561)
++++ b/src/test/java/com/handson/basic/utils/StudentSearch.java	(date 1643236512561)
+@@ -0,0 +1,150 @@
++package com.handson.basic.utils;
++
++import com.fasterxml.jackson.core.JsonProcessingException;
++import com.handson.basic.controller.StudentsController;
++import com.handson.basic.model.PaginationAndList;
++import com.handson.basic.model.SortDirection;
++import com.handson.basic.model.StudentSortField;
++
++import org.joda.time.LocalDate;
++
++public class StudentSearch {
++    private String fullName;
++    private LocalDate fromBirthDate;
++    private LocalDate toBirthDate;
++    private Integer fromSatScore;
++    private Integer toSatScore;
++    private Integer fromAvgScore;
++    private Integer page = 1;
++    private Integer count = 100000;
++    private StudentSortField sortField = StudentSortField.id;
++    private SortDirection sortDirection = SortDirection.desc;
++
++    public String getFullName() {
++        return fullName;
++    }
++
++    public LocalDate getFromBirthDate() {
++        return fromBirthDate;
++    }
++
++    public LocalDate getToBirthDate() {
++        return toBirthDate;
++    }
++
++    public Integer getFromSatScore() {
++        return fromSatScore;
++    }
++
++    public Integer getToSatScore() {
++        return toSatScore;
++    }
++
++    public Integer getFromAvgScore() {
++        return fromAvgScore;
++    }
++
++    public Integer getPage() {
++        return page;
++    }
++
++    public Integer getCount() {
++        return count;
++    }
++
++    public StudentSortField getSortField() {
++        return sortField;
++    }
++
++    public SortDirection getSortDirection() {
++        return sortDirection;
++    }
++
++    public static final class StudentSearchBuilder {
++        private String fullName;
++        private LocalDate fromBirthDate;
++        private LocalDate toBirthDate;
++        private Integer fromSatScore;
++        private Integer toSatScore;
++        private Integer fromAvgScore;
++        private Integer page = 1;
++        private Integer count = 100000;
++        private StudentSortField sortField = StudentSortField.id;
++        private SortDirection sortDirection = SortDirection.desc;
++        private StudentsController studentsController;
++
++        public static StudentSearchBuilder aStudentSearch (StudentsController studentsController, String testId) {
++            var res = new StudentSearchBuilder();
++            res.studentsController = studentsController;
++            res.fullName = testId;
++            return res;
++        }
++
++
++        public StudentSearchBuilder fullName(String fullName) {
++            this.fullName = fullName;
++            return this;
++        }
++
++        public StudentSearchBuilder fromBirthDate(LocalDate fromBirthDate) {
++            this.fromBirthDate = fromBirthDate;
++            return this;
++        }
++
++        public StudentSearchBuilder toBirthDate(LocalDate toBirthDate) {
++            this.toBirthDate = toBirthDate;
++            return this;
++        }
++
++        public StudentSearchBuilder fromSatScore(Integer fromSatScore) {
++            this.fromSatScore = fromSatScore;
++            return this;
++        }
++
++        public StudentSearchBuilder toSatScore(Integer toSatScore) {
++            this.toSatScore = toSatScore;
++            return this;
++        }
++
++        public StudentSearchBuilder fromAvgScore(Integer fromAvgScore) {
++            this.fromAvgScore = fromAvgScore;
++            return this;
++        }
++
++        public StudentSearchBuilder page(Integer page) {
++            this.page = page;
++            return this;
++        }
++
++        public StudentSearchBuilder count(Integer count) {
++            this.count = count;
++            return this;
++        }
++
++        public StudentSearchBuilder sortField(StudentSortField sortField) {
++            this.sortField = sortField;
++            return this;
++        }
++
++        public StudentSearchBuilder sortDirection(SortDirection sortDirection) {
++            this.sortDirection = sortDirection;
++            return this;
++        }
++
++        public PaginationAndList execute() throws JsonProcessingException {
++            StudentSearch studentSearch = new StudentSearch();
++            studentSearch.fromSatScore = this.fromSatScore;
++            studentSearch.toSatScore = this.toSatScore;
++            studentSearch.sortField = this.sortField;
++            studentSearch.fromBirthDate = this.fromBirthDate;
++            studentSearch.count = this.count;
++            studentSearch.toBirthDate = this.toBirthDate;
++            studentSearch.fullName = this.fullName;
++            studentSearch.fromAvgScore = this.fromAvgScore;
++            studentSearch.sortDirection = this.sortDirection;
++            studentSearch.page = this.page;
++            return studentsController.search(fullName,fromBirthDate, toBirthDate, fromSatScore, toSatScore,
++                    fromAvgScore, page, count, sortField, sortDirection).getBody();
++        }
++    }
++}
+Index: docker-compose-local.yml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/docker-compose-local.yml b/docker-compose-local.yml
+new file mode 100644
+--- /dev/null	(date 1643237240885)
++++ b/docker-compose-local.yml	(date 1643237240885)
+@@ -0,0 +1,18 @@
++version: "3"
++services:
++  appserver:
++    container_name: server
++    hostname: localhost
++    image: basic-spring
++    ports:
++      - "8080:8080"
++  postgres:
++    image: postgres
++    environment:
++      POSTGRES_PASSWORD: postgres
++    ports:
++    - 5432:5432
++    volumes:
++      - ./postgresdata:/var/lib/postgresql/data
++    privileged: true
++
+Index: src/test/resources/application-test.properties
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/test/resources/application-test.properties b/src/test/resources/application-test.properties
+new file mode 100644
+--- /dev/null	(date 1643306822736)
++++ b/src/test/resources/application-test.properties	(date 1643306822736)
+@@ -0,0 +1,19 @@
++spring.main.allow-bean-definition-overriding=true
++spring.datasource.url=jdbc:h2:~/test;DB_CLOSE_DELAY=-1;TRACE_LEVEL_FILE=3;TRACE_LEVEL_SYSTEM_OUT=3;IGNORECASE=TRUE;AUTO_SERVER=TRUE
++spring.datasource.username=sa
++spring.datasource.password=
++spring.datasource.driver-class-name=org.h2.Driver
++spring.datasource.strategy=EMBEDDED
++
++#JPA properties
++spring.jpa.show-sql = true
++spring.jpa.hibernate.ddl-auto = create
++spring.jpa.database-platform=org.hibernate.dialect.H2Dialect
++
++amazon.aws.accesskey=AKIA6PS436XZW5V5FE5P
++amazon.aws.secretkey=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
++bucket.url=files.handson.academy
++
++sms4free.key=J2IX1eEa9
++sms4free.user=0525236451
++sms4free.password=66534228
+Index: src/test/java/com/handson/basic/StudentsControllerTest.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/test/java/com/handson/basic/StudentsControllerTest.java b/src/test/java/com/handson/basic/StudentsControllerTest.java
+new file mode 100644
+--- /dev/null	(date 1643310657980)
++++ b/src/test/java/com/handson/basic/StudentsControllerTest.java	(date 1643310657980)
+@@ -0,0 +1,94 @@
++package com.handson.basic;
++
++import com.fasterxml.jackson.databind.ObjectMapper;
++import com.handson.basic.controller.StudentsController;
++import com.handson.basic.model.StudentOut;
++import com.handson.basic.util.AWSService;
++import com.handson.basic.util.SmsService;
++import com.handson.basic.utils.TestContext;
++import com.handson.basic.utils.TestMocks;
++import org.junit.jupiter.api.BeforeEach;
++import org.junit.jupiter.api.Test;
++import org.junit.runner.RunWith;
++import org.mockito.verification.VerificationMode;
++import org.springframework.beans.factory.annotation.Autowired;
++import org.springframework.boot.test.context.SpringBootTest;
++import org.springframework.mock.web.MockMultipartFile;
++import org.springframework.test.context.ActiveProfiles;
++import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
++import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
++import org.springframework.test.context.web.WebAppConfiguration;
++import org.springframework.web.multipart.MultipartFile;
++
++
++import static com.handson.basic.utils.StudentSearch.StudentSearchBuilder.aStudentSearch;
++import static org.hamcrest.CoreMatchers.is;
++import static org.junit.Assert.assertThat;
++import static org.mockito.ArgumentMatchers.any;
++import static org.mockito.Mockito.atLeastOnce;
++import static org.mockito.Mockito.verify;
++import static org.mockito.Mockito.times;
++
++
++
++@SpringBootTest(classes = {BasicApplication.class, TestMocks.class})
++@ActiveProfiles({"test"})
++@WebAppConfiguration
++@RunWith(SpringJUnit4ClassRunner.class)
++@SpringJUnitConfig
++class StudentsControllerTest {
++    @Autowired
++    private ObjectMapper om;
++
++
++    @Autowired
++    private StudentsController sc;
++
++    @Autowired
++    private SmsService smsService;
++
++    @Autowired
++    private AWSService awsService;
++
++    @Test
++    void get10Patients() throws Exception {
++        c.givenStudents(10, sc);
++        assertThat(aStudentSearch(sc, c.testUuid()).execute().getData().size(), is(10));
++    }
++
++    @Test
++    void checkSatFromFilter() throws Exception {
++        c.givenStudents(10, sc);
++        assertThat(aStudentSearch(sc, c.testUuid()).fromSatScore(600).execute().getData().size(), is(5));
++    }
++
++    @Test
++    void checkSatToFilter() throws Exception {
++        c.givenStudents(10, sc);
++        assertThat(aStudentSearch(sc, c.testUuid()).toSatScore(600).execute().getData().size(), is(6));
++    }
++
++    @Test
++    void checkSmsSent() throws Exception {
++        c.givenStudents(10, sc);
++        sc.smsAll("hi");
++        Thread.sleep(1000);
++        verify(smsService, atLeastOnce()).send(any(),any());
++    }
++
++    @Test
++    void checkPictureUpload() throws Exception {
++        c.givenStudents(1, sc);
++        StudentOut student = c.getFirstStudent();
++        sc.uploadStudentImage(student.getId(),  new MockMultipartFile("test", "originalFileName", "png", new byte[0]));
++        verify(awsService, times(  1)).putInBucket(any(),any());
++    }
++
++    TestContext c;
++
++    @BeforeEach
++    void initContext() {
++        c = new TestContext(om);
++        c.setStudentController(sc);
++    }
++}

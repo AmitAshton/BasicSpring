@@ -1,0 +1,332 @@
+Index: src/main/java/com/handson/basic/repo/StudentGradeService.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/com/handson/basic/repo/StudentGradeService.java b/src/main/java/com/handson/basic/repo/StudentGradeService.java
+new file mode 100644
+--- /dev/null	(date 1642590659826)
++++ b/src/main/java/com/handson/basic/repo/StudentGradeService.java	(date 1642590659826)
+@@ -0,0 +1,33 @@
++package com.handson.basic.repo;
++
++
++import com.handson.basic.model.StudentGrade;
++import org.springframework.beans.factory.annotation.Autowired;
++import org.springframework.stereotype.Service;
++
++import java.util.Optional;
++
++@Service
++public class StudentGradeService {
++
++    @Autowired
++    StudentGradeRepository repository;
++
++    public Iterable<StudentGrade> all() {
++        return repository.findAll();
++    }
++
++    public Optional<StudentGrade> findById(Long id) {
++        return repository.findById(id);
++    }
++
++
++    public StudentGrade save(StudentGrade studentGrade) {
++        return repository.save(studentGrade);
++    }
++
++    public void delete(StudentGrade studentGrade) {
++        repository.delete(studentGrade);
++    }
++
++}
+Index: src/main/java/com/handson/basic/repo/StudentGradeRepository.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/com/handson/basic/repo/StudentGradeRepository.java b/src/main/java/com/handson/basic/repo/StudentGradeRepository.java
+new file mode 100644
+--- /dev/null	(date 1642590953167)
++++ b/src/main/java/com/handson/basic/repo/StudentGradeRepository.java	(date 1642590953167)
+@@ -0,0 +1,9 @@
++package com.handson.basic.repo;
++
++
++import com.handson.basic.model.StudentGrade;
++import org.springframework.data.repository.CrudRepository;
++
++public interface StudentGradeRepository extends CrudRepository<StudentGrade,Long> {
++
++}
+Index: src/main/java/com/handson/basic/controller/StudentsGradesController.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/com/handson/basic/controller/StudentsGradesController.java b/src/main/java/com/handson/basic/controller/StudentsGradesController.java
+new file mode 100644
+--- /dev/null	(date 1642590953171)
++++ b/src/main/java/com/handson/basic/controller/StudentsGradesController.java	(date 1642590953171)
+@@ -0,0 +1,63 @@
++package com.handson.basic.controller;
++
++import com.handson.basic.model.GradeIn;
++import com.handson.basic.model.Student;
++import com.handson.basic.model.StudentGrade;
++import com.handson.basic.repo.StudentGradeService;
++import com.handson.basic.repo.StudentService;
++import org.springframework.beans.factory.annotation.Autowired;
++import org.springframework.http.HttpStatus;
++import org.springframework.http.ResponseEntity;
++import org.springframework.web.bind.annotation.*;
++
++import java.util.Optional;
++
++
++@RestController
++@RequestMapping("/api/students")
++public class StudentsGradesController {
++    @Autowired
++    StudentService studentService;
++
++    @Autowired
++    StudentGradeService studentGradeService;
++
++
++
++    @RequestMapping(value = "/{studentId}/grades", method = RequestMethod.POST)
++    public ResponseEntity<?> insertStudentGrade(Long studentId,  @RequestBody GradeIn gradeIn)
++    {
++        var student = studentService.findById(studentId);
++        if (student.isEmpty()) throw new RuntimeException("Student:" + studentId +" not found");
++        StudentGrade studentGrade = gradeIn.toGrade(student.get());
++        studentGrade = studentGradeService.save(studentGrade);
++        return new ResponseEntity<>(studentGrade, HttpStatus.OK);
++    }
++
++    @RequestMapping(value = "/{studentId}/grades/{id}", method = RequestMethod.PUT)
++    public ResponseEntity<?> updateStudent(@PathVariable Long studentId, @PathVariable Long id, @RequestBody GradeIn gradeIn)
++    {
++        Optional<Student> dbStudent = studentService.findById(studentId);
++        if (dbStudent.isEmpty()) throw new RuntimeException("Student with id: " + studentId + " not found");
++
++        Optional<StudentGrade> dbStudentGrade = studentGradeService.findById(id);
++        if (dbStudentGrade.isEmpty()) throw new RuntimeException("Student grade with id: " + id + " not found");
++
++        gradeIn.updateStudentGrade(dbStudentGrade.get());
++        StudentGrade updatedStudentGrade = studentGradeService.save(dbStudentGrade.get());
++        return new ResponseEntity<>(updatedStudentGrade, HttpStatus.OK);
++    }
++
++    @RequestMapping(value = "/{studentId}/grades/{id}", method = RequestMethod.DELETE)
++    public ResponseEntity<?> deleteStudentGrade(@PathVariable Long studentId, @PathVariable Long id)
++    {
++        Optional<Student> dbStudent = studentService.findById(studentId);
++        if (dbStudent.isEmpty()) throw new RuntimeException("Student with id: " + studentId + " not found");
++
++        Optional<StudentGrade> dbStudentGrade = studentGradeService.findById(id);
++        if (dbStudentGrade.isEmpty()) throw new RuntimeException("Student grade with id: " + id + " not found");
++
++        studentGradeService.delete(dbStudentGrade.get());
++        return new ResponseEntity<>("DELETED", HttpStatus.OK);
++    }
++}
+Index: src/main/java/com/handson/basic/model/StudentGrade.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/com/handson/basic/model/StudentGrade.java b/src/main/java/com/handson/basic/model/StudentGrade.java
+new file mode 100644
+--- /dev/null	(date 1642590659821)
++++ b/src/main/java/com/handson/basic/model/StudentGrade.java	(date 1642590659821)
+@@ -0,0 +1,140 @@
++package com.handson.basic.model;
++
++import com.fasterxml.jackson.annotation.JsonFormat;
++import com.fasterxml.jackson.annotation.JsonIgnore;
++import com.fasterxml.jackson.annotation.JsonProperty;
++import com.handson.basic.util.Dates;
++import org.hibernate.validator.constraints.Length;
++import org.joda.time.LocalDateTime;
++
++import javax.persistence.*;
++import javax.validation.constraints.Max;
++import javax.validation.constraints.Min;
++import javax.validation.constraints.NotEmpty;
++import javax.validation.constraints.NotNull;
++import java.io.Serializable;
++import java.util.Date;
++
++@Entity
++@Table(name="student_grade")
++public class StudentGrade implements Serializable {
++    private static final long serialVersionUID = 1L;
++    @Id
++    @GeneratedValue(strategy= GenerationType.AUTO)
++    private Long id;
++
++    @NotNull
++    @Column(nullable = false, updatable = false)
++    private Date createdAt = Dates.nowUTC();
++
++    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd HH:mm:ss")
++    @JsonProperty("createdAt")
++    public LocalDateTime calcCreatedAt() {
++        return Dates.atLocalTime(createdAt);
++    }
++
++    @JsonIgnore
++    @NotNull
++    @ManyToOne(optional = false)
++    @JoinColumn(name = "studentId")
++    private Student student;
++
++    @NotEmpty
++    @Length(max = 60)
++    private String courseName;
++
++
++    @Min(10)
++    @Max(100)
++    private Integer courseScore;
++
++    public Long getId() {
++        return id;
++    }
++
++    public void setId(Long id) {
++        this.id = id;
++    }
++
++    public Date getCreatedAt() {
++        return createdAt;
++    }
++
++    public void setCreatedAt(Date createdAt) {
++        this.createdAt = createdAt;
++    }
++
++    public Student getStudent() {
++        return student;
++    }
++
++    public void setStudent(Student student) {
++        this.student = student;
++    }
++
++    public String getCourseName() {
++        return courseName;
++    }
++
++    public void setCourseName(String courseName) {
++        this.courseName = courseName;
++    }
++
++    public Integer getCourseScore() {
++        return courseScore;
++    }
++
++    public void setCourseScore(Integer courseScore) {
++        this.courseScore = courseScore;
++    }
++
++    public static final class StudentGradeBuilder {
++        private Long id;
++        private Date createdAt = Dates.nowUTC();
++        private Student student;
++        private String courseName;
++        private Integer courseScore;
++
++        private StudentGradeBuilder() {
++        }
++
++        public static StudentGradeBuilder aStudentGrade() {
++            return new StudentGradeBuilder();
++        }
++
++        public StudentGradeBuilder id(Long id) {
++            this.id = id;
++            return this;
++        }
++
++        public StudentGradeBuilder createdAt(Date createdAt) {
++            this.createdAt = createdAt;
++            return this;
++        }
++
++        public StudentGradeBuilder student(Student student) {
++            this.student = student;
++            return this;
++        }
++
++        public StudentGradeBuilder courseName(String courseName) {
++            this.courseName = courseName;
++            return this;
++        }
++
++        public StudentGradeBuilder courseScore(Integer courseScore) {
++            this.courseScore = courseScore;
++            return this;
++        }
++
++        public StudentGrade build() {
++            StudentGrade studentGrade = new StudentGrade();
++            studentGrade.student = this.student;
++            studentGrade.courseName = this.courseName;
++            studentGrade.courseScore = this.courseScore;
++            studentGrade.id = this.id;
++            studentGrade.createdAt = this.createdAt;
++            return studentGrade;
++        }
++    }
++}
+Index: src/main/java/com/handson/basic/model/GradeIn.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/com/handson/basic/model/GradeIn.java b/src/main/java/com/handson/basic/model/GradeIn.java
+new file mode 100644
+--- /dev/null	(date 1642590953173)
++++ b/src/main/java/com/handson/basic/model/GradeIn.java	(date 1642590953173)
+@@ -0,0 +1,37 @@
++package com.handson.basic.model;
++
++import org.hibernate.validator.constraints.Length;
++
++import javax.validation.constraints.Max;
++import javax.validation.constraints.Min;
++import javax.validation.constraints.NotEmpty;
++
++import static com.handson.basic.model.StudentGrade.StudentGradeBuilder.aStudentGrade;
++
++public class GradeIn {
++
++    @NotEmpty
++    @Length(max = 60)
++    private String courseName;
++
++    @Min(10)
++    @Max(100)
++    private Integer courseScore;
++
++    public StudentGrade toGrade(Student student) {
++        return aStudentGrade().student(student).courseName(courseName).courseScore(courseScore).build();
++    }
++
++    public void updateStudentGrade(StudentGrade studentGrade) {
++        studentGrade.setCourseName(courseName);
++        studentGrade.setCourseScore(courseScore);
++    }
++
++    public String getCourseName() {
++        return courseName;
++    }
++
++    public Integer getCourseScore() {
++        return courseScore;
++    }
++}
